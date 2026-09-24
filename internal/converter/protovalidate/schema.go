@@ -1,6 +1,7 @@
 package protovalidate
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -190,6 +191,9 @@ func updateSchemaWithFieldRules(opts options.Options, schema *base.Schema, rules
 	case *validate.FieldRules_Duration:
 		innerRules = t.Duration.ProtoReflect()
 		updateSchemaDuration(opts, schema, t.Duration)
+	case *validate.FieldRules_FieldMask:
+		innerRules = t.FieldMask.ProtoReflect()
+		updateSchemaFieldMask(opts, schema, t.FieldMask)
 	case *validate.FieldRules_Timestamp:
 		innerRules = t.Timestamp.ProtoReflect()
 		updateSchemaTimestamp(opts, schema, t.Timestamp)
@@ -238,6 +242,17 @@ func updateSchemaWithFieldRules(opts options.Options, schema *base.Schema, rules
 			updateSchemaMap(opts, schema, t.Map, desc)
 		}
 	}
+}
+
+func appendRuleDescription(schema *base.Schema, ruleStr string) {
+	b := strings.Builder{}
+	if schema.Description != "" {
+		b.WriteString(strings.TrimSpace(schema.Description))
+		b.WriteByte('\n')
+	}
+	b.WriteString(ruleStr)
+	b.WriteByte('\n')
+	schema.Description = b.String()
 }
 
 func updateWithCEL(schema *base.Schema, rules []*validate.Rule, val *protoreflect.Value, fieldDesc protoreflect.FieldDescriptor) {
@@ -1062,23 +1077,27 @@ func updateSchemaEnum(opts options.Options, schema *base.Schema, constraint *val
 		constraint.Example = nil
 	}()
 
-	enumDesc := desc.Enum()
-	if enumDesc == nil {
-		// Not an enum, nothing to do.
-		return
+	var enumDesc protoreflect.EnumDescriptor
+	if desc != nil {
+		enumDesc = desc.Enum()
+		if enumDesc == nil {
+			// Not an enum, nothing to do.
+			return
+		}
 	}
 
-	if constraint.Const != nil {
+	if constraint.Const != nil && enumDesc != nil {
 		val := protoreflect.EnumNumber(*constraint.Const)
 		if enumVal := enumDesc.Values().ByNumber(val); enumVal != nil {
 			schema.Const = utils.CreateStringNode(string(enumVal.Name()))
 		}
 	}
 
-	// For 'defined_only', when using string enums in constraints, the base enum schema
-	// already enforces the defined values, so no extra annotation is needed.
+	if constraint.GetDefinedOnly() {
+		appendRuleDescription(schema, "enum.defined_only = true")
+	}
 
-	if len(constraint.In) > 0 {
+	if len(constraint.In) > 0 && enumDesc != nil {
 		items := make([]*yaml.Node, 0, len(constraint.In))
 		for _, item := range constraint.In {
 			val := protoreflect.EnumNumber(item)
@@ -1090,7 +1109,7 @@ func updateSchemaEnum(opts options.Options, schema *base.Schema, constraint *val
 		}
 		schema.Enum = items
 	}
-	if len(constraint.NotIn) > 0 {
+	if len(constraint.NotIn) > 0 && enumDesc != nil {
 		items := make([]*yaml.Node, 0, len(constraint.NotIn))
 		for _, item := range constraint.NotIn {
 			val := protoreflect.EnumNumber(item)
@@ -1102,10 +1121,12 @@ func updateSchemaEnum(opts options.Options, schema *base.Schema, constraint *val
 		}
 		schema.Not = base.CreateSchemaProxy(&base.Schema{Type: schema.Type, Enum: items})
 	}
-	for _, item := range constraint.Example {
-		val := protoreflect.EnumNumber(item)
-		if enumVal := enumDesc.Values().ByNumber(val); enumVal != nil {
-			schema.Examples = append(schema.Examples, utils.CreateStringNode(string(enumVal.Name())))
+	if enumDesc != nil {
+		for _, item := range constraint.Example {
+			val := protoreflect.EnumNumber(item)
+			if enumVal := enumDesc.Values().ByNumber(val); enumVal != nil {
+				schema.Examples = append(schema.Examples, utils.CreateStringNode(string(enumVal.Name())))
+			}
 		}
 	}
 }
@@ -1183,6 +1204,8 @@ func updateSchemaAny(opts options.Options, schema *base.Schema, constraint *vali
 func updateSchemaDuration(opts options.Options, schema *base.Schema, constraint *validate.DurationRules) {
 	defer func() {
 		constraint.Const = nil
+		constraint.GreaterThan = nil
+		constraint.LessThan = nil
 		constraint.In = nil
 		constraint.NotIn = nil
 		constraint.Example = nil
@@ -1190,6 +1213,26 @@ func updateSchemaDuration(opts options.Options, schema *base.Schema, constraint 
 
 	if constraint.Const != nil {
 		schema.Const = utils.CreateStringNode(constraint.Const.AsDuration().String())
+	}
+	switch tt := constraint.GreaterThan.(type) {
+	case *validate.DurationRules_Gt:
+		if tt.Gt != nil {
+			appendRuleDescription(schema, fmt.Sprintf("duration.gt = %s", tt.Gt.AsDuration().String()))
+		}
+	case *validate.DurationRules_Gte:
+		if tt.Gte != nil {
+			appendRuleDescription(schema, fmt.Sprintf("duration.gte = %s", tt.Gte.AsDuration().String()))
+		}
+	}
+	switch tt := constraint.LessThan.(type) {
+	case *validate.DurationRules_Lt:
+		if tt.Lt != nil {
+			appendRuleDescription(schema, fmt.Sprintf("duration.lt = %s", tt.Lt.AsDuration().String()))
+		}
+	case *validate.DurationRules_Lte:
+		if tt.Lte != nil {
+			appendRuleDescription(schema, fmt.Sprintf("duration.lte = %s", tt.Lte.AsDuration().String()))
+		}
 	}
 	if len(constraint.In) > 0 {
 		items := make([]*yaml.Node, len(constraint.In))
@@ -1207,6 +1250,20 @@ func updateSchemaDuration(opts options.Options, schema *base.Schema, constraint 
 	}
 	for _, item := range constraint.Example {
 		schema.Examples = append(schema.Examples, utils.CreateStringNode(item.AsDuration().String()))
+	}
+}
+
+func updateSchemaFieldMask(opts options.Options, schema *base.Schema, constraint *validate.FieldMaskRules) {
+	defer func() {
+		constraint.Const = nil
+		constraint.Example = nil
+	}()
+
+	if constraint.Const != nil {
+		schema.Const = utils.CreateStringNode(strings.Join(constraint.Const.GetPaths(), ","))
+	}
+	for _, item := range constraint.Example {
+		schema.Examples = append(schema.Examples, utils.CreateStringNode(strings.Join(item.GetPaths(), ",")))
 	}
 }
 
