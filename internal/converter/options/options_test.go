@@ -115,6 +115,15 @@ func TestFromString(t *testing.T) {
 			assert.False(t, opts.FeatureEnabled(options.FeatureTwirp))
 		})
 
+		t.Run("connectrpc and field_behavior", func(t *testing.T) {
+			opts, err := options.FromString("features=connectrpc;google.api.field_behavior")
+			require.NoError(t, err)
+			assert.True(t, opts.FeatureEnabled(options.FeatureConnectRPC))
+			assert.True(t, opts.FeatureEnabled(options.FeatureGoogleAPIFieldBehavior))
+			assert.False(t, opts.FeatureEnabled(options.FeatureGoogleAPIHTTP))
+			assert.False(t, opts.FeatureEnabled(options.FeatureTwirp))
+		})
+
 		t.Run("invalid feature", func(t *testing.T) {
 			_, err := options.FromString("features=invalid")
 			require.Error(t, err)

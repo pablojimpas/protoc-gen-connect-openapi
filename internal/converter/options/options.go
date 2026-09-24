@@ -16,11 +16,12 @@ import (
 type Feature string
 
 const (
-	FeatureGoogleAPIHTTP Feature = "google.api.http"
-	FeatureConnectRPC    Feature = "connectrpc"
-	FeatureTwirp         Feature = "twirp"
-	FeatureGnostic       Feature = "gnostic"
-	FeatureProtovalidate Feature = "protovalidate"
+	FeatureGoogleAPIHTTP          Feature = "google.api.http"
+	FeatureGoogleAPIFieldBehavior Feature = "google.api.field_behavior"
+	FeatureConnectRPC             Feature = "connectrpc"
+	FeatureTwirp                  Feature = "twirp"
+	FeatureGnostic                Feature = "gnostic"
+	FeatureProtovalidate          Feature = "protovalidate"
 )
 
 const (
@@ -153,8 +154,11 @@ func (opts *Options) EnableFeatures(features ...Feature) error {
 	enabledFeatures := make(map[Feature]bool)
 	for _, feature := range features {
 		switch feature {
-		case FeatureGoogleAPIHTTP, FeatureConnectRPC, FeatureTwirp, FeatureGnostic, FeatureProtovalidate:
+		case FeatureGoogleAPIHTTP, FeatureGoogleAPIFieldBehavior, FeatureConnectRPC, FeatureTwirp, FeatureGnostic, FeatureProtovalidate:
 			enabledFeatures[feature] = true
+			if feature == FeatureGoogleAPIHTTP {
+				enabledFeatures[FeatureGoogleAPIFieldBehavior] = true
+			}
 		default:
 			return fmt.Errorf("invalid feature: '%s'", feature)
 		}
@@ -170,10 +174,11 @@ func NewOptions() Options {
 			"json": {},
 		},
 		EnabledFeatures: map[Feature]bool{
-			FeatureConnectRPC:    true,
-			FeatureGoogleAPIHTTP: true,
-			FeatureGnostic:       true,
-			FeatureProtovalidate: true,
+			FeatureConnectRPC:             true,
+			FeatureGoogleAPIHTTP:          true,
+			FeatureGoogleAPIFieldBehavior: true,
+			FeatureGnostic:                true,
+			FeatureProtovalidate:          true,
 		},
 		AsyncAPIChannelTemplate:   "/ws/{package}.{service}/{method}",
 		WellKnownTypeDescriptions: WellKnownTypeDescriptionsConcise,

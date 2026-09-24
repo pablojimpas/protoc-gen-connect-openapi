@@ -904,3 +904,67 @@ func TestJSONSchemaGnosticPropertyOverride(t *testing.T) {
 	assert.Error(t, recordSchema.Validate(recordRequired),
 		"start_date is protovalidate-required, so omitting it must fail")
 }
+
+func TestGoogleAPIFieldBehaviorFeature(t *testing.T) {
+	relPath := "standard/field_behavior.proto"
+	pf := loadTestFileDescriptorSet(t)
+	makeReq := func(options string) string {
+		req := new(pluginpb.CodeGeneratorRequest)
+		req.ProtoFile = pf.GetFile()
+		for _, f := range req.GetProtoFile() {
+			if relPath == f.GetName() {
+				req.FileToGenerate = append(req.FileToGenerate, f.GetName())
+			}
+		}
+		req.Parameter = proto.String("debug,format=yaml," + options)
+		b, err := proto.Marshal(req)
+		require.NoError(t, err)
+
+		resp, err := converter.ConvertFrom(bytes.NewBuffer(b))
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+		require.Len(t, resp.File, 1)
+		return resp.File[0].GetContent()
+	}
+
+	t.Run("with connectrpc and field_behavior feature", func(t *testing.T) {
+		content := makeReq("features=connectrpc;google.api.field_behavior")
+		var doc map[string]any
+		require.NoError(t, yaml.Unmarshal([]byte(content), &doc))
+
+		// Should generate ConnectRPC endpoint, not google.api.http transcoding endpoint
+		paths := doc["paths"].(map[string]any)
+		assert.Contains(t, paths, "/field_behavior.Service/Method")
+		assert.NotContains(t, paths, "/v1/{user_id}")
+
+		// Should retain field_behavior annotations
+		components := doc["components"].(map[string]any)
+		schemas := components["schemas"].(map[string]any)
+		userSchema := schemas["field_behavior.User"].(map[string]any)
+
+		reqFields, ok := userSchema["required"].([]any)
+		require.True(t, ok, "field_behavior.User should have required fields")
+		assert.Contains(t, reqFields, "name")
+
+		props := userSchema["properties"].(map[string]any)
+		userIdProp := props["userId"].(map[string]any)
+		assert.Equal(t, true, userIdProp["readOnly"])
+
+		passwordProp := props["password"].(map[string]any)
+		assert.Equal(t, true, passwordProp["writeOnly"])
+	})
+
+	t.Run("with only connectrpc feature", func(t *testing.T) {
+		content := makeReq("features=connectrpc")
+		var doc map[string]any
+		require.NoError(t, yaml.Unmarshal([]byte(content), &doc))
+
+		// Should NOT retain field_behavior annotations when feature is excluded
+		components := doc["components"].(map[string]any)
+		schemas := components["schemas"].(map[string]any)
+		userSchema := schemas["field_behavior.User"].(map[string]any)
+
+		assert.Nil(t, userSchema["required"], "field_behavior.User should NOT have required fields")
+	})
+}
+

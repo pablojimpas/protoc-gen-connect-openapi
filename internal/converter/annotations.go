@@ -28,7 +28,7 @@ func (*annotator) AnnotateField(opts options.Options, schema *base.Schema, desc 
 	if opts.FeatureEnabled(options.FeatureGnostic) {
 		schema = gnostic.SchemaWithPropertyAnnotations(opts, schema, desc)
 	}
-	if opts.FeatureEnabled(options.FeatureGoogleAPIHTTP) {
+	if opts.FeatureEnabled(options.FeatureGoogleAPIHTTP) || opts.FeatureEnabled(options.FeatureGoogleAPIFieldBehavior) {
 		schema = googleapi.SchemaWithPropertyAnnotations(opts, schema, desc)
 	}
 	return schema
