@@ -1069,6 +1069,9 @@ func updateSchemaBytes(opts options.Options, schema *base.Schema, constraint *va
 }
 
 func updateSchemaEnum(opts options.Options, schema *base.Schema, constraint *validate.EnumRules, desc protoreflect.FieldDescriptor) {
+	if constraint == nil {
+		return
+	}
 	defer func() {
 		constraint.Const = nil
 		constraint.DefinedOnly = nil
@@ -1202,6 +1205,9 @@ func updateSchemaAny(opts options.Options, schema *base.Schema, constraint *vali
 }
 
 func updateSchemaDuration(opts options.Options, schema *base.Schema, constraint *validate.DurationRules) {
+	if constraint == nil {
+		return
+	}
 	defer func() {
 		constraint.Const = nil
 		constraint.GreaterThan = nil
@@ -1249,11 +1255,16 @@ func updateSchemaDuration(opts options.Options, schema *base.Schema, constraint 
 		schema.Not = base.CreateSchemaProxy(&base.Schema{Type: schema.Type, Enum: items})
 	}
 	for _, item := range constraint.Example {
-		schema.Examples = append(schema.Examples, utils.CreateStringNode(item.AsDuration().String()))
+		if item != nil {
+			schema.Examples = append(schema.Examples, utils.CreateStringNode(item.AsDuration().String()))
+		}
 	}
 }
 
 func updateSchemaFieldMask(opts options.Options, schema *base.Schema, constraint *validate.FieldMaskRules) {
+	if constraint == nil {
+		return
+	}
 	defer func() {
 		constraint.Const = nil
 		constraint.Example = nil
@@ -1263,7 +1274,9 @@ func updateSchemaFieldMask(opts options.Options, schema *base.Schema, constraint
 		schema.Const = utils.CreateStringNode(strings.Join(constraint.Const.GetPaths(), ","))
 	}
 	for _, item := range constraint.Example {
-		schema.Examples = append(schema.Examples, utils.CreateStringNode(strings.Join(item.GetPaths(), ",")))
+		if item != nil {
+			schema.Examples = append(schema.Examples, utils.CreateStringNode(strings.Join(item.GetPaths(), ",")))
+		}
 	}
 }
 

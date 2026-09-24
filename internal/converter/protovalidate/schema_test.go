@@ -119,3 +119,15 @@ func TestUpdateSchemaEnum_DefinedOnly(t *testing.T) {
 
 	assert.Equal(t, "enum.defined_only = true\n", schema.Description)
 }
+
+func TestUpdateSchema_NilConstraints(t *testing.T) {
+	opts := options.NewOptions()
+	schema := &base.Schema{}
+
+	assert.NotPanics(t, func() {
+		updateSchemaDuration(opts, schema, nil)
+		updateSchemaFieldMask(opts, schema, nil)
+		updateSchemaEnum(opts, schema, nil, nil)
+	})
+}
+
