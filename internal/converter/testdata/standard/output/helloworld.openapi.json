@@ -16,16 +16,6 @@
         "operationId": "helloworld.Greeter.SayHello.get",
         "parameters": [
           {
-            "name": "Connect-Protocol-Version",
-            "in": "header",
-            "description": "Define the version of the Connect protocol",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/connect-protocol-version"
-            },
-            "example": 1
-          },
-          {
             "name": "Connect-Timeout-Ms",
             "in": "header",
             "description": "Define the timeout, in ms",
@@ -78,6 +68,7 @@
             "name": "connect",
             "in": "query",
             "description": "Define the version of the Connect protocol",
+            "required": true,
             "schema": {
               "$ref": "#/components/schemas/connect"
             },

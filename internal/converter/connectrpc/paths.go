@@ -94,15 +94,19 @@ func MethodToOperation(opts options.Options, method protoreflect.MethodDescripto
 			isStreaming,
 		),
 	}
+	if !returnGet {
+		op.Parameters = append(op.Parameters,
+			&v3.Parameter{
+				Name:        "Connect-Protocol-Version",
+				In:          "header",
+				Description: "Define the version of the Connect protocol",
+				Required:    util.BoolPtr(true),
+				Schema:      base.CreateSchemaProxyRef("#/components/schemas/connect-protocol-version"),
+				Example:     utils.CreateIntNode("1"),
+			},
+		)
+	}
 	op.Parameters = append(op.Parameters,
-		&v3.Parameter{
-			Name:        "Connect-Protocol-Version",
-			In:          "header",
-			Description: "Define the version of the Connect protocol",
-			Required:    util.BoolPtr(true),
-			Schema:      base.CreateSchemaProxyRef("#/components/schemas/connect-protocol-version"),
-			Example:     utils.CreateIntNode("1"),
-		},
 		&v3.Parameter{
 			Name:        "Connect-Timeout-Ms",
 			In:          "header",
@@ -153,6 +157,7 @@ func MethodToOperation(opts options.Options, method protoreflect.MethodDescripto
 				Name:        "connect",
 				In:          "query",
 				Description: "Define the version of the Connect protocol",
+				Required:    util.BoolPtr(true),
 				Schema:      base.CreateSchemaProxyRef("#/components/schemas/connect"),
 				Example:     utils.CreateStringNode("v1"),
 			},

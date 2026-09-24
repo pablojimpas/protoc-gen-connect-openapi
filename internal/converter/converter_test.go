@@ -904,3 +904,78 @@ func TestJSONSchemaGnosticPropertyOverride(t *testing.T) {
 	assert.Error(t, recordSchema.Validate(recordRequired),
 		"start_date is protovalidate-required, so omitting it must fail")
 }
+
+func TestAllowGET_ProtocolParameters(t *testing.T) {
+	relPath := "standard/helloworld.proto"
+	pf := loadTestFileDescriptorSet(t)
+	req := new(pluginpb.CodeGeneratorRequest)
+	req.ProtoFile = pf.GetFile()
+	for _, f := range req.GetProtoFile() {
+		if relPath == f.GetName() {
+			req.FileToGenerate = append(req.FileToGenerate, f.GetName())
+		}
+	}
+	req.Parameter = proto.String("debug,format=yaml,allow-get,features=connectrpc")
+	b, err := proto.Marshal(req)
+	require.NoError(t, err)
+
+	resp, err := converter.ConvertFrom(bytes.NewBuffer(b))
+	require.NoError(t, err)
+	require.Nil(t, resp.Error)
+	require.Len(t, resp.File, 1)
+
+	content := resp.File[0].GetContent()
+
+	var doc map[string]any
+	require.NoError(t, yaml.Unmarshal([]byte(content), &doc))
+
+	paths := doc["paths"].(map[string]any)
+	sayHelloPath, ok := paths["/helloworld.Greeter/SayHello"].(map[string]any)
+	require.True(t, ok, "path /helloworld.Greeter/SayHello must exist")
+
+	// GET operation: connect query param must be required, Connect-Protocol-Version must NOT be required
+	getOp, ok := sayHelloPath["get"].(map[string]any)
+	require.True(t, ok, "GET operation must exist for NO_SIDE_EFFECTS method")
+
+	getParams, ok := getOp["parameters"].([]any)
+	require.True(t, ok)
+
+	var foundConnectQuery bool
+	for _, p := range getParams {
+		param := p.(map[string]any)
+		name := param["name"].(string)
+		in := param["in"].(string)
+
+		if in == "header" && name == "Connect-Protocol-Version" {
+			reqVal, _ := param["required"].(bool)
+			assert.False(t, reqVal, "Connect-Protocol-Version header should not be required on GET")
+		}
+		if in == "query" && name == "connect" {
+			foundConnectQuery = true
+			reqVal, _ := param["required"].(bool)
+			assert.True(t, reqVal, "connect query parameter must be required: true on GET")
+		}
+	}
+	assert.True(t, foundConnectQuery, "connect query param should be present on GET")
+
+	// POST operation: Connect-Protocol-Version header must be required: true
+	postOp, ok := sayHelloPath["post"].(map[string]any)
+	require.True(t, ok, "POST operation must exist")
+
+	postParams, ok := postOp["parameters"].([]any)
+	require.True(t, ok)
+
+	var foundProtocolVersionHeader bool
+	for _, p := range postParams {
+		param := p.(map[string]any)
+		name := param["name"].(string)
+		in := param["in"].(string)
+
+		if in == "header" && name == "Connect-Protocol-Version" {
+			foundProtocolVersionHeader = true
+			reqVal, _ := param["required"].(bool)
+			assert.True(t, reqVal, "Connect-Protocol-Version header must be required: true on POST")
+		}
+	}
+	assert.True(t, foundProtocolVersionHeader, "Connect-Protocol-Version header must be present on POST")
+}
